@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#EE5A0B">
+<meta name="description" content="Autocross tire coach: starting pressures, next-run advice from tire temps, and auto-filled weather.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ConeLog">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>ConeLog Tire Coach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}img{max-width:100%}[hidden]{display:none!important}
+
+/* Layout: one-thumb mobile app. Car-shaped 2x2 tire grid everywhere, bottom tab bar, timing-slip numerals. */
+:root{
+  --bg:#ECEFEF; --surface:#FFFFFF; --sunk:#F4F6F6; --ink:#14191C; --muted:#5B666C; --line:#D3D9DB;
+  --accent:#EE5A0B; --accent-ink:#FFFFFF; --good:#1D8A55; --warn:#B76E00; --bad:#C23B2B;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:12px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1214; --surface:#192024; --sunk:#141A1D; --ink:#EAEEEF; --muted:#94A0A6; --line:#2A3337;
+  --accent:#FF7A2E; --accent-ink:#1A0D04; --good:#4CC488; --warn:#E8A33A; --bad:#F0705F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1214; --surface:#192024; --sunk:#141A1D; --ink:#EAEEEF; --muted:#94A0A6; --line:#2A3337;
+  --accent:#FF7A2E; --accent-ink:#1A0D04; --good:#4CC488; --warn:#E8A33A; --bad:#F0705F; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 var(--body);-webkit-tap-highlight-color:transparent}
+.wrap{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px calc(96px + env(safe-area-inset-bottom,0px))}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.brand{font:700 26px/1 var(--display);letter-spacing:.01em;display:flex;align-items:center;gap:8px}
+.brand svg{flex:none}
+.car{font-size:13px;color:var(--muted);text-align:right;line-height:1.25;min-width:0}
+.car b{display:block;color:var(--ink);font-weight:600}
+h2{font:700 20px/1.1 var(--display);margin:0;text-wrap:balance;letter-spacing:.01em}
+.label{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spread{justify-content:space-between}
+.muted{color:var(--muted);font-size:14px}
+.num{font-family:var(--display);font-variant-numeric:tabular-nums}
+.note{font-size:14px;color:var(--muted);margin:0}
+/* inputs */
+.field{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+.field span{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.04em}
+input.n,select,input.t{width:100%;min-width:0;height:46px;border:1px solid var(--line);border-radius:10px;background:var(--sunk);color:var(--ink);font:600 20px var(--display);font-variant-numeric:tabular-nums;padding:0 10px;text-align:center}
+input.t,select{font:500 16px var(--body);text-align:left}
+input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.conds{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* tire grid shaped like the car */
+.carmap{display:grid;grid-template-columns:1fr 1fr;gap:10px 10px;position:relative}
+.carmap .axle{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.carmap .axle::before,.carmap .axle::after{content:"";flex:1;height:1px;background:var(--line)}
+.tire{background:var(--sunk);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.tire .tn{display:flex;justify-content:space-between;align-items:baseline;font:700 15px var(--display);letter-spacing:.04em}
+.tire .tn small{font:500 11px var(--body);color:var(--muted);letter-spacing:.02em}
+.iom{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.iom input{height:44px;font-size:19px;padding:0 2px}
+.iom .k{font-size:10px;font-weight:600;color:var(--muted);text-align:center;letter-spacing:.06em}
+.big{font:700 40px/1 var(--display);font-variant-numeric:tabular-nums}
+.big small{font-size:15px;color:var(--muted);font-weight:600;margin-left:2px}
+.rec{background:var(--sunk);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.rec .sub{font-size:12px;color:var(--muted)}
+.hero{border-color:var(--accent);border-width:1.5px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 9px;border-radius:99px;background:var(--sunk);color:var(--muted);border:1px solid var(--line)}
+.chip.ok{color:var(--good)} .chip.warn{color:var(--warn)}
+/* buttons */
+button{font:600 16px var(--body);border:0;cursor:pointer;border-radius:10px;min-height:46px;padding:0 16px;color:var(--ink);background:var(--sunk);border:1px solid var(--line)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:700}
+button.block{width:100%}
+button.ghost{background:transparent;border-color:transparent;color:var(--accent);padding:0 6px;min-height:36px}
+button:disabled{opacity:.55;cursor:default}
+button.small{min-height:36px;font-size:14px;padding:0 12px}
+/* advice */
+.adv{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.adv li{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;font-size:15px}
+.adv .tag{font:700 13px var(--display);letter-spacing:.05em;padding:3px 7px;border-radius:6px;background:var(--sunk);border:1px solid var(--line);min-width:34px;text-align:center}
+.adv .tag.hot{color:var(--bad)} .adv .tag.cool{color:var(--good)} .adv .tag.bal{color:var(--warn)}
+.delta{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums}
+.delta.up{color:var(--good)} .delta.down{color:var(--bad)} .delta.zero{color:var(--muted)}
+/* history */
+.run{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.run:first-of-type{border-top:0}
+.run .rn{font:700 15px var(--display);color:var(--muted);width:34px}
+.run .tm{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums}
+.run .tm.best{color:var(--accent)}
+.run .meta{font-size:13px;color:var(--muted);min-width:0}
+.banner{font-size:14px;background:var(--sunk);border:1px dashed var(--line);border-radius:10px;padding:10px 12px;color:var(--muted)}
+details summary{cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center;min-height:30px}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"+";font:700 22px var(--display);color:var(--muted)}
+details[open] summary::after{content:"–"}
+/* tab bar */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px max(10px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px));z-index:5}
+nav.tabs .in{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;max-width:560px}
+nav.tabs a{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;border-radius:10px;color:var(--muted);text-decoration:none;font-size:12px;font-weight:600}
+nav.tabs a svg{width:24px;height:24px}
+nav.tabs a[aria-current="page"]{color:var(--accent);background:var(--sunk)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;font-weight:600;font-size:14px;z-index:9;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M13 2 L20.5 22 H5.5 Z" fill="var(--accent)"/><rect x="2" y="21.5" width="22" height="3" rx="1.2" fill="var(--accent)"/><path d="M9.6 11 H16.4 L17.4 13.8 H8.6 Z" fill="var(--surface)"/></svg>
+      ConeLog
+    </div>
+    <div class="car" id="carLabel"></div>
+  </header>
+
+  <!-- TODAY -->
+  <section id="v-today" class="stack">
+    <div class="card">
+      <div class="row spread"><h2>Conditions</h2><button class="ghost small" id="wxBtn">Auto-fill weather</button></div>
+      <div class="conds">
+        <label class="field"><span>AIR °F</span><input class="n" id="air" inputmode="decimal" enterkeyhint="next"></label>
+        <label class="field"><span>TRACK °F</span><input class="n" id="track" inputmode="decimal" enterkeyhint="done"></label>
+        <label class="field"><span>SURFACE</span><select id="surface"><option>Asphalt</option><option>Concrete</option><option>Mixed</option></select></label>
+        <label class="field"><span>SKY</span><select id="sky"><option>Sunny</option><option>Partly cloudy</option><option>Overcast</option><option>Damp</option></select></label>
+      </div>
+      <p class="note" id="wxMsg" hidden></p>
+    </div>
+
+    <div class="card hero" id="recCard"></div>
+
+    <div class="card">
+      <div class="row spread"><h2>Cold pressures set</h2><span class="label">psi</span></div>
+      <div class="carmap" id="coldMap"></div>
+      <p class="note">What you aired the tires to before the first run. ConeLog uses this to learn how much each tire rises.</p>
+    </div>
+
+    <details class="card" id="setupCard">
+      <summary>Car and targets</summary>
+      <div class="conds">
+        <label class="field" style="grid-column:1/-1"><span>CAR</span><input class="t" id="carName" placeholder="2026 Audi RS3"></label>
+        <label class="field" style="grid-column:1/-1"><span>TIRE</span><input class="t" id="tireName" placeholder="200TW, e.g. RE-71RS"></label>
+        <label class="field"><span>TARGET HOT FRONT</span><input class="n" id="tgtF" inputmode="decimal"></label>
+        <label class="field"><span>TARGET HOT REAR</span><input class="n" id="tgtR" inputmode="decimal"></label>
+      </div>
+      <p class="note">Target hot pressure is where the tire works best right after a run. Check your tire maker's autocross guide if you're unsure.</p>
+    </details>
+  </section>
+
+  <!-- LOG -->
+  <section id="v-log" class="stack" hidden>
+    <div class="card hero" id="advCard" hidden></div>
+    <div class="card">
+      <div class="row spread"><h2 id="runTitle">Run 1</h2><span class="muted" id="runCond"></span></div>
+      <div class="conds">
+        <label class="field"><span>RAW TIME s</span><input class="n" id="time" inputmode="decimal" enterkeyhint="next" placeholder="48.512"></label>
+        <label class="field"><span>CONES</span><input class="n" id="cones" inputmode="numeric" enterkeyhint="next" placeholder="0"></label>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row spread"><h2>Tire temps</h2><span class="label">°F · hot psi</span></div>
+      <div class="carmap" id="tempMap"></div>
+      <p class="note">Probe outside, middle, inside within a minute of stopping. Boxes are laid out the way you see the tire standing in front of it.</p>
+    </div>
+    <button class="primary block" id="saveRun">Save run and get advice</button>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="v-history" class="stack" hidden>
+    <div class="banner" id="sampleBanner" hidden>These are example runs so you can see how ConeLog works. Your first saved run replaces them.</div>
+    <div class="card"><div class="row spread"><h2>Runs</h2><span class="muted" id="runCount"></span></div><div id="runList"></div></div>
+  </section>
+</div>
+
+<nav class="tabs" aria-label="Sections"><div class="in">
+  <a href="#today" data-v="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 12 16 8"/><path d="M12 3.5v2M20.5 12h-2M3.5 12h2"/></svg>Today</a>
+  <a href="#log" data-v="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Log run</a>
+  <a href="#history" data-v="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Runs</a>
+</div></nav>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(()=>{
+const C=["fl","fr","rl","rr"], SHORT={fl:"FL",fr:"FR",rl:"RL",rr:"RR"};
+const $=id=>document.getElementById(id);
+const num=v=>{const n=parseFloat(String(v).replace(",","."));return isFinite(n)?n:null};
+const r1=n=>Math.round(n*10)/10, half=n=>Math.round(n*2)/2;
+const fmtT=s=>s==null?"—":s.toFixed(3);
+const isFront=c=>c[0]==="f";
+
+/* ---------- state ---------- */
+let S={settings:{car:"",tire:"",tgtF:34,tgtR:33},session:{air:"",track:"",surface:"Asphalt",sky:"Sunny",cold:{}},runs:[]};
+let lastAdvice=null;
+
+/* example runs, shown only while the log is empty */
+function sampleRuns(){
+  const base=Date.now()-36*864e5, out=[];
+  const rows=[
+    [72,95,{fl:30,fr:30,rl:29,rr:29},{fl:[118,124,121,34.5],fr:[120,126,122,34.8],rl:[104,106,105,32.6],rr:[103,105,104,32.4]},49.84,1],
+    [75,101,{fl:29,fr:29,rl:29,rr:29},{fl:[124,122,117,33.8],fr:[125,123,118,34.0],rl:[106,107,105,32.9],rr:[106,106,104,32.7]},49.21,0],
+    [79,108,{fl:29,fr:29,rl:28.5,rr:28.5},{fl:[127,124,119,34.2],fr:[128,125,120,34.4],rl:[109,108,106,32.5],rr:[108,108,105,32.3]},48.77,0],
+    [83,114,{fl:28.5,fr:28.5,rl:28.5,rr:28.5},{fl:[130,127,121,34.0],fr:[131,128,122,34.3],rl:[112,111,109,33.0],rr:[111,110,108,32.8]},48.52,0],
+    [86,119,{fl:28,fr:28,rl:28,rr:28},{fl:[133,128,124,33.9],fr:[134,129,124,34.1],rl:[114,113,111,32.9],rr:[114,112,110,32.7]},48.61,1]];
+  rows.forEach((r,i)=>{const t={};C.forEach(c=>{const[a,b,d,p]=r[3][c];t[c]={i:a,m:b,o:d,p}});
+    out.push({id:"s"+i,ts:base+i*3600e3*3,air:r[0],track:r[1],surface:"Asphalt",sky:"Sunny",cold:r[2],tires:t,time:r[4],cones:r[5],sample:true})});
+  return out;
+}
+const runsView=()=>S.runs.length?S.runs:sampleRuns();
+
+/* ---------- storage: private db when signed in, else this browser ---------- */
+const LS="conelog.v1";
+let backend={async load(){try{const d=JSON.parse(localStorage.getItem(LS)||"null");if(d)S=Object.assign(S,d)}catch(e){}},
+  async saveSettings(){this._ls()},async saveSession(){this._ls()},async saveRun(){this._ls()},async deleteRun(){this._ls()},
+  _ls(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}}};
+
+async function tryDb(){
+  if(!window.claude||!claude.use)return;
+  const timeout=new Promise(r=>setTimeout(()=>r(null),10000));
+  const [db,user]=await Promise.race([Promise.all([claude.use("db"),claude.use("user")]),timeout.then(()=>[null,null])]);
+  if(!db||!user)return;
+  let uid;try{uid=await user.id()}catch(e){return}
+  if(!uid)return;
+  const base="data/users/"+uid, runsCol=db.collection(base+"/log/runs");
+  const sDoc=db.doc(base+"/settings"), sesDoc=db.doc(base+"/session");
+  try{
+    const [s,ses,runs]=await Promise.all([sDoc.get(),sesDoc.get(),runsCol.get()]);
+    const local=JSON.parse(localStorage.getItem(LS)||"null");
+    if(s.exists)S.settings=Object.assign(S.settings,s.data());
+    if(ses.exists)S.session=Object.assign(S.session,ses.data());
+    S.runs=runs.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>a.ts-b.ts);
+    // first sign-in: carry over runs saved in this browser
+    if(!S.runs.length&&local&&local.runs&&local.runs.length){
+      for(const r of local.runs){await runsCol.doc(r.id).set(r)}S.runs=local.runs;
+    }
+  }catch(e){return}
+  backend={async load(){},
+    async saveSettings(){await sDoc.set(S.settings)},
+    async saveSession(){await sesDoc.set(S.session)},
+    async saveRun(r){await runsCol.doc(r.id).set(r)},
+    async deleteRun(id){await runsCol.doc(id).delete()}};
+  renderAll();
+}
+const safe=p=>Promise.resolve(p).catch(()=>toast("Couldn't save. Check your connection."));
+
+/* ---------- pressure calculator ---------- */
+function predict(){
+  const runs=runsView(), T=num(S.session.track)??num(S.session.air), out={};
+  let n=0,lo=Infinity,hi=-Infinity;
+  for(const c of C){
+    const pts=runs.map(r=>{const p=r.tires?.[c]?.p,cold=r.cold?.[c],x=num(r.track)??num(r.air);
+      return(p!=null&&cold!=null&&x!=null)?{x,y:p-cold}:null}).filter(Boolean);
+    const tgt=isFront(c)?S.settings.tgtF:S.settings.tgtR;
+    let rise;
+    if(!pts.length){rise=isFront(c)?4.5:3.5}
+    else{
+      const mx=pts.reduce((a,p)=>a+p.x,0)/pts.length, my=pts.reduce((a,p)=>a+p.y,0)/pts.length;
+      let slope=0.06;
+      const sxx=pts.reduce((a,p)=>a+(p.x-mx)**2,0);
+      if(pts.length>=3&&sxx>50){slope=pts.reduce((a,p)=>a+(p.x-mx)*(p.y-my),0)/sxx;slope=Math.max(0,Math.min(0.2,slope))}
+      rise=my+(T!=null?slope*(T-mx):0);
+      n=Math.max(n,pts.length);pts.forEach(p=>{lo=Math.min(lo,p.x);hi=Math.max(hi,p.x)});
+    }
+    out[c]={cold:half(tgt-rise),rise:r1(rise),tgt};
+  }
+  return {out,n,lo,hi,T};
+}
+
+/* ---------- next-run advice ---------- */
+function advise(run){
+  const items=[], adj={};
+  const st=S.settings;
+  for(const c of C){
+    const t=run.tires[c];if(!t)continue;
+    const tgt=isFront(c)?st.tgtF:st.tgtR;
+    adj[c]=t.p!=null?half(tgt-t.p):null;
+    if([t.i,t.m,t.o].some(v=>v==null))continue;
+    const edges=(t.i+t.o)/2,d=t.m-edges,diff=t.i-t.o;
+    if(d>4)items.push({tag:SHORT[c],k:"hot",txt:`Center is ${r1(d)}°F hotter than the edges, so it's over-inflated. Drop ${d>8?"2":"1"} psi.`});
+    else if(d<-4)items.push({tag:SHORT[c],k:"cool",txt:`Center is ${r1(-d)}°F cooler than the edges, so it's under-inflated. Add ${d<-8?"2":"1"} psi.`});
+    if(diff<-3)items.push({tag:SHORT[c],k:"hot",txt:`Outside edge is ${r1(-diff)}°F hotter than the inside. Add negative camber, or 1 psi if camber is fixed.`});
+    else if(diff>15)items.push({tag:SHORT[c],k:"bal",txt:`Inside edge is ${r1(diff)}°F hotter than the outside. That's more negative camber than this course is using.`});
+  }
+  const avg=cs=>{const v=[];cs.forEach(c=>{const t=run.tires[c];if(t)[t.i,t.m,t.o].forEach(x=>x!=null&&v.push(x))});return v.length?v.reduce((a,b)=>a+b,0)/v.length:null};
+  const f=avg(["fl","fr"]),r=avg(["rl","rr"]);
+  if(f!=null&&r!=null){
+    if(f-r>20)items.push({tag:"BAL",k:"bal",txt:`Fronts run ${Math.round(f-r)}°F hotter than rears. The front is doing most of the work, which usually feels like push. Try +1 psi rear or a softer front bar.`});
+    else if(r-f>10)items.push({tag:"BAL",k:"bal",txt:`Rears run ${Math.round(r-f)}°F hotter than fronts. Expect a loose rear. Try −1 psi rear.`});
+  }
+  const air=num(run.air);const all=avg(C);
+  if(all!=null&&air!=null&&all-air<25)items.unshift({tag:"READ",k:"bal",txt:"Temps are within 25°F of air temperature, so these readings may have cooled. Probe faster next run, fronts first."});
+  return {items,adj};
+}
+
+/* ---------- rendering ---------- */
+function tireTpl(c,mode){
+  const left=c[1]==="l";
+  const order=left?[["o","OUT"],["m","MID"],["i","IN"]]:[["i","IN"],["m","MID"],["o","OUT"]];
+  if(mode==="cold") return `<div class="tire"><div class="tn">${SHORT[c]}</div><input class="n" id="cold-${c}" inputmode="decimal" aria-label="${SHORT[c]} cold psi"></div>`;
+  return `<div class="tire"><div class="tn">${SHORT[c]}<small>${left?"outside ← → inside":"inside ← → outside"}</small></div>
+    <div class="iom">${order.map(([k,l])=>`<div class="k">${l}</div>`).join("")}
+    ${order.map(([k,l])=>`<input class="n tmp" id="t-${c}-${k}" inputmode="numeric" enterkeyhint="next" maxlength="3" aria-label="${SHORT[c]} ${l} temperature">`).join("")}</div>
+    <label class="field"><span>HOT PSI</span><input class="n" id="t-${c}-p" inputmode="decimal" enterkeyhint="next" aria-label="${SHORT[c]} hot psi"></label></div>`;
+}
+function mapTpl(mode){return `<div class="axle">Front</div>${tireTpl("fl",mode)}${tireTpl("fr",mode)}<div class="axle">Rear</div>${tireTpl("rl",mode)}${tireTpl("rr",mode)}`}
+
+function heat(el){
+  const v=num(el.value);
+  if(v==null||!el.classList.contains("tmp")){el.style.background="";return}
+  const t=Math.max(0,Math.min(1,(v-80)/80)), h=210-210*t;
+  el.style.background=`color-mix(in oklab, hsl(${h} 85% 50%) ${18+t*22}%, var(--sunk))`;
+}
+
+function renderCar(){const s=S.settings;$("carLabel").innerHTML=s.car||s.tire?`<b>${esc(s.car||"My car")}</b>${esc(s.tire||"")}`:`<b>Set up your car</b>in Today`}
+function esc(s){return String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]))}
+
+function renderRec(){
+  const {out,n,lo,hi,T}=predict();
+  const sample=!S.runs.length;
+  const conf=n===0?`<span class="chip warn">Starting guess · log a run to personalize</span>`:
+    `<span class="chip ${n>=3?"ok":"warn"}">${sample?"Example data · ":""}${n} run${n>1?"s":""} at ${Math.round(lo)}–${Math.round(hi)}°F</span>`;
+  $("recCard").innerHTML=`<div class="row spread"><h2>Start cold at</h2><span class="label">${T!=null?`for ${Math.round(T)}°F ${num(S.session.track)!=null?"track":"air"}`:"add a temperature"}</span></div>
+    <div class="carmap">${C.map(c=>`<div class="rec"><span class="tn label">${SHORT[c]}</span><span class="big">${out[c].cold.toFixed(1)}<small>psi</small></span><span class="sub">rises ~${out[c].rise} → ${out[c].tgt} hot</span></div>`).join("")}</div>
+    <div class="row spread">${conf}<button class="small" id="useRec">Use these</button></div>`;
+  $("useRec").onclick=()=>{C.forEach(c=>{S.session.cold[c]=out[c].cold;$("cold-"+c).value=out[c].cold});safe(backend.saveSession());toast("Cold pressures set")};
+}
+
+function renderToday(){
+  const s=S.session;["air","track"].forEach(k=>$(k).value=s[k]??"");$("surface").value=s.surface;$("sky").value=s.sky;
+  C.forEach(c=>$("cold-"+c).value=s.cold[c]??"");
+  const st=S.settings;$("carName").value=st.car;$("tireName").value=st.tire;$("tgtF").value=st.tgtF;$("tgtR").value=st.tgtR;
+  renderRec();
+}
+
+function renderLogHead(){
+  const today=new Date().toDateString();
+  const n=S.runs.filter(r=>new Date(r.ts).toDateString()===today).length+1;
+  $("runTitle").textContent="Run "+n;
+  const s=S.session, bits=[];
+  if(num(s.air)!=null)bits.push(Math.round(num(s.air))+"°F air");
+  if(num(s.track)!=null)bits.push(Math.round(num(s.track))+"°F track");
+  $("runCond").textContent=bits.join(" · ")||"Add conditions in Today";
+}
+
+function renderAdvice(){
+  const card=$("advCard");
+  if(!lastAdvice){card.hidden=true;return}
+  const {items,adj,run}=lastAdvice;card.hidden=false;
+  card.innerHTML=`<div class="row spread"><h2>Next run</h2><span class="muted">${run.time!=null?fmtT(run.time+2*(run.cones||0))+" s":""}</span></div>
+    <span class="label">Adjust pressure to hit target</span>
+    <div class="carmap">${C.map(c=>{const a=adj[c];const cls=a==null?"zero":a>0?"up":a<0?"down":"zero";
+      return `<div class="rec"><span class="label">${SHORT[c]}</span><span class="delta ${cls}">${a==null?"—":a===0?"OK":(a>0?"+":"−")+Math.abs(a).toFixed(1)}</span><span class="sub">${a==null?"no hot psi":a===0?"on target":"psi"}</span></div>`}).join("")}</div>
+    ${items.length?`<ul class="adv">${items.map(i=>`<li><span class="tag ${i.k}">${i.tag}</span><span>${i.txt}</span></li>`).join("")}</ul>`:`<p class="note">Temperatures look even across every tire. Keep this setup.</p>`}
+    <button class="small" id="dismissAdv">Log the next run</button>`;
+  $("dismissAdv").onclick=()=>{lastAdvice=null;renderAdvice();$("time").focus()};
+}
+
+function renderHistory(){
+  const runs=runsView().slice().reverse(), sample=!S.runs.length;
+  $("sampleBanner").hidden=!sample;
+  const best=Math.min(...runs.filter(r=>r.time!=null).map(r=>r.time+2*(r.cones||0)));
+  $("runCount").textContent=runs.length+" logged";
+  $("runList").innerHTML=runs.map((r,i)=>{
+    const cor=r.time!=null?r.time+2*(r.cones||0):null, d=new Date(r.ts);
+    const pf=[r.tires.fl?.p,r.tires.fr?.p].filter(v=>v!=null), pr=[r.tires.rl?.p,r.tires.rr?.p].filter(v=>v!=null);
+    const av=a=>a.length?r1(a.reduce((x,y)=>x+y,0)/a.length):"—";
+    return `<div class="run"><span class="rn">#${runs.length-i}</span>
+      <div class="meta"><span class="tm ${cor===best?"best":""}">${fmtT(cor)}</span>${r.cones?` <span class="muted">+${r.cones} cone${r.cones>1?"s":""}</span>`:""}<br>
+      ${d.toLocaleDateString(undefined,{month:"short",day:"numeric"})} · ${r.track??r.air??"—"}°F · hot ${av(pf)}/${av(pr)} psi</div>
+      ${sample?"":`<button class="ghost small" data-del="${r.id}" aria-label="Delete run">Delete</button>`}</div>`}).join("");
+  $("runList").querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    if(b.dataset.armed){S.runs=S.runs.filter(x=>x.id!==b.dataset.del);safe(backend.deleteRun(b.dataset.del));renderAll();toast("Run deleted")}
+    else{b.dataset.armed=1;b.textContent="Tap to confirm";setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.textContent="Delete"}},3000)}});
+}
+
+function renderAll(){renderCar();renderToday();renderLogHead();renderAdvice();renderHistory()}
+
+/* ---------- routing ---------- */
+function route(){
+  const v=(location.hash||"#today").slice(1);const ok=["today","log","history"].includes(v)?v:"today";
+  ["today","log","history"].forEach(k=>$("v-"+k).hidden=k!==ok);
+  document.querySelectorAll("nav.tabs a").forEach(a=>{if(a.dataset.v===ok)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current")});
+  if(ok==="log")renderLogHead();if(ok==="history")renderHistory();if(ok==="today")renderRec();
+  window.scrollTo(0,0);
+}
+addEventListener("hashchange",route);
+
+/* ---------- wiring ---------- */
+$("coldMap").innerHTML=mapTpl("cold");
+$("tempMap").innerHTML=mapTpl("temp");
+
+let sesTimer;
+function saveSessionSoon(){clearTimeout(sesTimer);sesTimer=setTimeout(()=>safe(backend.saveSession()),500)}
+["air","track"].forEach(k=>$(k).addEventListener("input",e=>{S.session[k]=e.target.value;renderRec();saveSessionSoon()}));
+["surface","sky"].forEach(k=>$(k).addEventListener("change",e=>{S.session[k]=e.target.value;saveSessionSoon()}));
+C.forEach(c=>$("cold-"+c).addEventListener("input",e=>{const v=num(e.target.value);if(v==null)delete S.session.cold[c];else S.session.cold[c]=v;saveSessionSoon()}));
+let setTimer;
+[["carName","car"],["tireName","tire"],["tgtF","tgtF"],["tgtR","tgtR"]].forEach(([id,k])=>$(id).addEventListener("input",e=>{
+  S.settings[k]=k.startsWith("tgt")?(num(e.target.value)??S.settings[k]):e.target.value;renderCar();renderRec();
+  clearTimeout(setTimer);setTimer=setTimeout(()=>safe(backend.saveSettings()),500)}));
+
+/* fast entry: auto-advance after 3 digits, Enter moves on */
+const order=["time","cones",...C.flatMap(c=>{const left=c[1]==="l";return(left?["o","m","i"]:["i","m","o"]).map(k=>`t-${c}-${k}`).concat(`t-${c}-p`)})];
+function next(id){const i=order.indexOf(id);if(i>-1&&i<order.length-1)$(order[i+1]).focus()}
+order.forEach(id=>{const el=$(id);
+  el.addEventListener("input",()=>{heat(el);if(el.classList.contains("tmp")&&el.value.replace(/\D/g,"").length>=3)next(id)});
+  el.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();next(id)}})});
+
+$("saveRun").onclick=()=>{
+  const tires={};let any=false;
+  C.forEach(c=>{const t={};["i","m","o","p"].forEach(k=>{t[k]=num($(`t-${c}-${k}`).value);if(t[k]!=null)any=true});tires[c]=t});
+  const time=num($("time").value);
+  if(!any&&time==null){toast("Enter a time or at least one tire reading");$("time").focus();return}
+  const s=S.session;
+  const run={id:"r"+Date.now().toString(36),ts:Date.now(),air:num(s.air),track:num(s.track),surface:s.surface,sky:s.sky,
+    cold:Object.assign({},s.cold),tires,time,cones:num($("cones").value)||0};
+  S.runs.push(run);safe(backend.saveRun(run));
+  lastAdvice=Object.assign(advise(run),{run});
+  order.forEach(id=>{$(id).value="";heat($(id))});
+  renderAll();window.scrollTo({top:0,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+  toast("Run saved");
+};
+
+/* weather auto-fill (needs location + network; falls back to manual) */
+$("wxBtn").onclick=async()=>{
+  const b=$("wxBtn"),msg=$("wxMsg");b.disabled=true;b.textContent="Getting weather…";msg.hidden=true;
+  try{
+    const pos=await new Promise((res,rej)=>{if(!navigator.geolocation)return rej();navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000,maximumAge:6e5})});
+    const {latitude:la,longitude:lo}=pos.coords;
+    const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${la.toFixed(3)}&longitude=${lo.toFixed(3)}&current=temperature_2m,cloud_cover,shortwave_radiation,precipitation&temperature_unit=fahrenheit`);
+    const j=(await r.json()).current;
+    const air=Math.round(j.temperature_2m), sun=j.shortwave_radiation||0;
+    S.session.air=air;S.session.track=Math.round(air+sun*0.035);
+    S.session.sky=j.precipitation>0?"Damp":j.cloud_cover<30?"Sunny":j.cloud_cover<75?"Partly cloudy":"Overcast";
+    renderToday();saveSessionSoon();msg.textContent="Track temperature is estimated from air temperature and sunlight.";msg.hidden=false;
+  }catch(e){msg.textContent="Couldn't get weather here. Enter air and track temperature by hand.";msg.hidden=false}
+  b.disabled=false;b.textContent="Auto-fill weather";
+};
+
+let tt;function toast(t){const el=$("toast");el.textContent=t;el.classList.add("on");clearTimeout(tt);tt=setTimeout(()=>el.classList.remove("on"),1800)}
+
+/* boot */
+backend.load().then(()=>{renderAll();route();tryDb()});
+})();
+</script>
+<script>if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script>
+</body>
+</html>
