@@ -178,6 +178,16 @@ nav.tabs a[aria-current="page"]{color:var(--accent);background:var(--sunk)}
   <section id="v-history" class="stack" hidden>
     <div class="banner" id="sampleBanner" hidden>These are example runs so you can see how ConeLog works. Your first saved run replaces them.</div>
     <div class="card"><div class="row spread"><h2>Runs</h2><span class="muted" id="runCount"></span></div><div id="runList"></div></div>
+    <div class="card">
+      <h2>Backup</h2>
+      <p class="note">Your runs live only on this phone. Save a backup file before switching phones or clearing your browser, then restore it on the new one.</p>
+      <div class="conds">
+        <button id="exportBtn">Save backup</button>
+        <button id="importBtn">Restore backup</button>
+      </div>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+      <p class="note" id="backupMsg" hidden></p>
+    </div>
   </section>
 </div>
 
@@ -443,6 +453,38 @@ $("wxBtn").onclick=async()=>{
     renderToday();saveSessionSoon();msg.textContent="Track temperature is estimated from air temperature and sunlight.";msg.hidden=false;
   }catch(e){msg.textContent="Couldn't get weather here. Enter air and track temperature by hand.";msg.hidden=false}
   b.disabled=false;b.textContent="Auto-fill weather";
+};
+
+/* backup: export / import */
+function backupMsg(t){const m=$("backupMsg");m.textContent=t;m.hidden=false}
+$("exportBtn").onclick=async()=>{
+  if(!S.runs.length){backupMsg("There are no saved runs to back up yet.");return}
+  const d=new Date(),stamp=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  const name=`conelog-backup-${stamp}.json`;
+  const json=JSON.stringify({app:"conelog",version:1,exported:d.toISOString(),settings:S.settings,session:S.session,runs:S.runs},null,1);
+  const file=new File([json],name,{type:"application/json"});
+  try{
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:"ConeLog backup"});backupMsg(`Backup of ${S.runs.length} runs ready. Save it to Files, Drive, or email it to yourself.`);return}
+  }catch(e){if(e&&e.name==="AbortError")return}
+  const url=URL.createObjectURL(file),a=document.createElement("a");
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);
+  backupMsg(`Saved ${name} with ${S.runs.length} runs.`);
+};
+$("importBtn").onclick=()=>$("importFile").click();
+$("importFile").onchange=async e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  try{
+    const d=JSON.parse(await f.text());
+    if(d.app!=="conelog"||!Array.isArray(d.runs))throw 0;
+    const have=new Set(S.runs.map(r=>r.id));let added=0;
+    for(const r of d.runs){if(r&&r.id&&r.tires&&!have.has(r.id)){S.runs.push(r);added++;await safe(backend.saveRun(r))}}
+    S.runs.sort((a,b)=>a.ts-b.ts);
+    if(d.settings&&!S.settings.car&&!S.settings.tire){S.settings=Object.assign(S.settings,d.settings);await safe(backend.saveSettings())}
+    backend._ls&&backend._ls();
+    renderAll();
+    backupMsg(added?`Restored ${added} run${added>1?"s":""}. Runs already on this phone were kept.`:"Every run in that backup is already on this phone.");
+    toast("Backup restored");
+  }catch(err){backupMsg("That file isn't a ConeLog backup. Pick a file named conelog-backup-….json.")}
 };
 
 let tt;function toast(t){const el=$("toast");el.textContent=t;el.classList.add("on");clearTimeout(tt);tt=setTimeout(()=>el.classList.remove("on"),1800)}
